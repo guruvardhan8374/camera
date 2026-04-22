@@ -184,316 +184,261 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] font-sans text-[#141414] selection:bg-[#141414] selection:text-[#F5F5F0]">
-      <header className="sticky top-0 z-50 border-b border-[#141414]/10 bg-[#F5F5F0]/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#141414] text-[#F5F5F0]">
-              <Scan className="h-5 w-5" />
+    <div className="min-h-screen bg-black text-white font-sans mask-lines relative overflow-x-hidden">
+      {/* Decorative Blur */}
+      <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-600/20 blur-3xl" />
+
+      <div className="relative mx-auto flex min-h-screen flex-col p-6 lg:p-12">
+        <header className="mb-12 flex flex-col justify-between gap-6 sm:flex-row sm:items-start lg:mb-20">
+          <div className="flex flex-col">
+            <span className="mb-1 font-mono text-[10px] tracking-[0.3em] text-blue-500 uppercase">
+              Edge-Native Inference
+            </span>
+            <div className="text-4xl font-black italic tracking-tighter uppercase sm:text-5xl">
+              Vision<span className="text-blue-500">.</span>AI
             </div>
-            <h1 className="text-xl font-semibold tracking-tight">Vision AI</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-[#141414]/20 font-mono text-[10px] uppercase tracking-wider">
-              Gemini 1.5 Flash
-            </Badge>
-          </div>
-        </div>
-      </header>
+          <nav className="flex gap-6 pt-2 font-mono text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase sm:gap-8">
+            <span className="cursor-pointer transition-colors hover:text-white">Active</span>
+            <span className="cursor-pointer transition-colors hover:text-white">Metrics</span>
+            <span className="text-white">Live-Feed</span>
+          </nav>
+        </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:py-12 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-12">
-          {/* Main Workspace */}
-          <div className="lg:col-span-8">
-            <Card className="overflow-hidden border-[#141414]/10 bg-white shadow-xl shadow-black/5">
-              <CardContent className="p-0">
-                <div 
-                  ref={containerRef}
-                  className="relative aspect-video w-full overflow-hidden bg-[#141414]/5 md:aspect-[4/3] lg:aspect-[16/10]"
-                >
-                  {!selectedImage && !isCapturing && (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-6 p-8 text-center">
-                      <div className="relative">
-                        <div className="absolute -inset-4 rounded-full bg-[#141414]/5" />
-                        <Camera className="relative h-12 w-12 opacity-40" />
-                      </div>
-                      <div className="max-w-sm space-y-2">
-                        <h3 className="text-lg font-medium">Point & Detect</h3>
-                        <p className="text-sm text-[#141414]/60">
-                          Show me some objects. I will identify them using real-time scene analysis.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap justify-center gap-4">
-                        <Button 
-                          onClick={() => fileInputRef.current?.click()}
-                          variant="outline"
-                          className="border-[#141414]/20 hover:bg-[#141414] hover:text-[#F5F5F0]"
-                        >
-                          <Upload className="mr-2 h-4 w-4" />
-                          Upload Photo
-                        </Button>
-                        <Button 
-                          onClick={startCamera}
-                          className="bg-[#141414] text-[#F5F5F0] hover:bg-[#141414]/90"
-                        >
-                          <Camera className="mr-2 h-4 w-4" />
-                          Launch Live Camera
-                        </Button>
-                      </div>
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileUpload} 
-                        accept="image/*" 
-                        className="hidden" 
-                      />
-                    </div>
-                  )}
-
-                  {isCapturing && (
-                    <div className="relative h-full w-full">
-                      <video 
-                        ref={videoRef} 
-                        autoPlay 
-                        playsInline 
-                        className="h-full w-full object-cover" 
-                      />
-
-                      {/* Overlays on Live Video */}
-                      <AnimatePresence>
-                        {result?.detections.map((detection, idx) => (
-                          <motion.div
-                            key={`${detection.label}-${idx}`}
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute border-2 border-[#141414] transition-all hover:bg-[#141414]/10"
-                            style={getBoxStyles(detection.box_2d)}
-                          >
-                            <div className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap bg-[#141414] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#F5F5F0]">
-                              {detection.label}
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-
-                      {isAnalyzing && (
-                        <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full bg-[#141414] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F5F5F0]">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Scanning Scene...
-                        </div>
-                      )}
-
-                      <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-4">
-                        <div className="flex items-center gap-4 rounded-full bg-black/20 p-2 backdrop-blur-xl">
-                          <Button 
-                            size="icon" 
-                            onClick={stopCamera}
-                            variant="ghost"
-                            className="h-12 w-12 rounded-full text-white hover:bg-white/10"
-                          >
-                            <CameraOff className="h-5 w-5" />
-                          </Button>
-                          
-                          <div className="h-12 w-px bg-white/10" />
-
-                          <Button 
-                            size="lg" 
-                            onClick={capturePhoto}
-                            className="h-14 w-14 rounded-full bg-white text-black hover:bg-white/90"
-                          >
-                            <div className="h-10 w-10 rounded-full border-2 border-black" />
-                          </Button>
-
-                          <div className="h-12 w-px bg-white/10" />
-
-                          <Button 
-                            onClick={() => setIsContinuous(!isContinuous)}
-                            variant={isContinuous ? "default" : "ghost"}
-                            className={cn(
-                              "h-12 px-6 rounded-full text-xs font-bold uppercase tracking-widest transition-all",
-                              isContinuous ? "bg-white text-black" : "text-white hover:bg-white/10"
-                            )}
-                          >
-                            {isContinuous ? (
-                              <div className="flex items-center gap-2">
-                                <span className="flex h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                                Continuous ON
-                              </div>
-                            ) : (
-                              "Auto Scan"
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedImage && (
-                    <div className="relative h-full w-full transition-all">
-                      <img 
-                        src={selectedImage} 
-                        alt="Selected" 
-                        className="h-full w-full object-contain" 
-                      />
-                      
-                      {/* Bounding Boxes */}
-                      {!isAnalyzing && result?.detections.map((detection, idx) => (
-                        <motion.div
-                          key={`${detection.label}-${idx}`}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="absolute border-2 border-[#141414] transition-all hover:bg-[#141414]/5"
-                          style={getBoxStyles(detection.box_2d)}
-                        >
-                          <div className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap bg-[#141414] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#F5F5F0]">
-                            {detection.label}
-                          </div>
-                        </motion.div>
-                      ))}
-
-                      <div className="absolute top-4 right-4 flex gap-2">
-                        <Button 
-                          size="icon" 
-                          variant="outline" 
-                          onClick={reset}
-                          className="h-10 w-10 border-white/20 bg-black/20 text-white backdrop-blur-md hover:bg-black/40"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      {isAnalyzing && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[2px]">
-                          <Loader2 className="h-8 w-8 animate-spin text-[#141414]" />
-                          <p className="mt-4 text-sm font-medium uppercase tracking-widest text-[#141414]">Analyzing Post-Capture...</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 rounded-full border border-[#141414]/10 bg-white px-4 py-2 text-xs font-medium">
-                <Info className="h-3.5 w-3.5 text-[#141414]/40" />
-                <span>Status: {isContinuous ? 'Auto-Scanning' : isCapturing ? 'Live Feed' : 'Idle'}</span>
-              </div>
-              {selectedImage && !isAnalyzing && (
+        <main className="grid flex-grow gap-12 lg:grid-cols-12 lg:items-start">
+          {/* Main Title & Action (Left/Upper) */}
+          <div className="flex flex-col lg:col-span-12 xl:col-span-4">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8 text-[60px] font-black leading-[0.85] tracking-tighter uppercase sm:text-[90px] xl:text-[110px]"
+            >
+              Identify <br />
+              <span className="text-blue-500">Fast.</span> <br />
+              Analyze.
+            </motion.h1>
+            <p className="max-w-md font-medium leading-snug text-zinc-400 sm:text-lg">
+              Low-latency AI scene analysis powered by Gemini 1.5 Flash. Real-time identification of complex environments.
+            </p>
+            
+            <div className="mt-8 flex flex-wrap gap-4">
+              {!isCapturing && (
                 <Button 
-                  onClick={() => analyzeImage(selectedImage)} 
-                  variant="ghost" 
-                  size="sm"
-                  className="gap-2 text-xs font-medium hover:bg-[#141414]/5"
+                  onClick={startCamera}
+                  className="h-auto rounded-none bg-white px-8 py-5 text-sm font-black text-black uppercase tracking-widest hover:bg-zinc-200"
                 >
-                  <RefreshCw className="h-3 w-3" />
-                  Request Deep Scan
+                  <Camera className="mr-3 h-5 w-5" />
+                  Launch Scanner
                 </Button>
               )}
+              <Button 
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-auto rounded-none border-zinc-800 bg-transparent px-8 py-5 text-sm font-black uppercase tracking-widest text-white hover:bg-zinc-900"
+              >
+                <Upload className="mr-3 h-5 w-5" />
+                Upload Data
+              </Button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+                accept="image/*" 
+                className="hidden" 
+              />
+            </div>
+
+            {/* Inference Metadata (Hidden on small) */}
+            <footer className="mt-16 hidden border-t border-zinc-900 pt-8 xl:block">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col">
+                  <span className="mb-2 text-[10px] font-bold text-zinc-600 uppercase">Engine Architecture</span>
+                  <div className="text-sm font-bold tracking-tight uppercase">YOLO-GEMINI-FLASH v1.5</div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="mb-2 text-[10px] font-bold text-zinc-600 uppercase">Detection Status</span>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("h-2 w-2 rounded-full", isContinuous ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
+                    <span className="text-sm font-bold tracking-tight">{isContinuous ? "STREAMING_MODE" : "STANDBY"}</span>
+                  </div>
+                </div>
+              </div>
+            </footer>
+          </div>
+
+          {/* Visual Workspace (Middle/Right) */}
+          <div className="lg:col-span-7 xl:col-span-5">
+            <div className="glow-border relative aspect-square overflow-hidden border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm sm:rounded-2xl">
+              {!selectedImage && !isCapturing && (
+                <div className="flex h-full w-full items-center justify-center border-2 border-dashed border-zinc-800">
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <Scan className="h-12 w-12 text-zinc-700" />
+                    <span className="font-mono text-[10px] tracking-widest text-zinc-600 uppercase">Awaiting Visual Input</span>
+                  </div>
+                </div>
+              )}
+
+              {isCapturing && (
+                <div className="relative h-full w-full">
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    className="h-full w-full object-cover" 
+                  />
+                  
+                  {/* Bounding Boxes Over Video */}
+                  <AnimatePresence>
+                    {result?.detections.map((detection, idx) => (
+                      <motion.div
+                        key={`${detection.label}-${idx}`}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute border-2 border-blue-500"
+                        style={getBoxStyles(detection.box_2d)}
+                      >
+                        <div className="absolute -top-6 left-0 bg-blue-500 px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase">
+                          {detection.label}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  <div className="absolute top-4 left-4 flex items-center gap-2 border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-md">
+                    <div className={cn("h-2 w-2 rounded-full", isContinuous ? "bg-red-500 animate-pulse" : "bg-blue-500")} />
+                    <span className="font-mono text-[10px] tracking-wider uppercase">Live: {isContinuous ? "Stream Analysis" : "Camera Active"}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedImage && (
+                <div className="relative h-full w-full">
+                  <img src={selectedImage} alt="Analysis Target" className="h-full w-full object-contain" />
+                  
+                  {!isAnalyzing && result?.detections.map((detection, idx) => (
+                    <motion.div
+                      key={`${detection.label}-${idx}`}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="absolute border-2 border-blue-500"
+                      style={getBoxStyles(detection.box_2d)}
+                    >
+                      <div className="absolute -top-6 left-0 bg-blue-500 px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase">
+                        {detection.label}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {isAnalyzing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                  <div className="h-12 w-12 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  <span className="mt-4 font-mono text-[10px] font-bold tracking-[0.3em] text-white uppercase">Analyzing Frame</span>
+                </div>
+              )}
+
+              {/* Bottom Analysis Stats Card */}
+              <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
+                <div className="mb-2 flex justify-between">
+                  <span className="font-mono text-[10px] text-zinc-500 uppercase">Detection_Confidence</span>
+                  <span className="font-mono text-[10px] text-blue-400">94.2%</span>
+                </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: isAnalyzing ? "40%" : result ? "94%" : "0%" }}
+                    className="h-full bg-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Controls Row */}
+            {isCapturing && (
+              <div className="mt-4 flex gap-2">
+                <Button 
+                  onClick={capturePhoto}
+                  className="flex-grow rounded-none bg-white py-6 font-black text-black uppercase tracking-widest hover:bg-zinc-200"
+                >
+                  Capture Frame
+                </Button>
+                <Button 
+                  onClick={() => setIsContinuous(!isContinuous)}
+                  className={cn(
+                    "flex-grow rounded-none py-6 font-black uppercase tracking-widest transition-all",
+                    isContinuous ? "bg-red-600 text-white" : "border-zinc-800 bg-transparent text-white hover:bg-zinc-900 border"
+                  )}
+                >
+                  {isContinuous ? "Stop Stream" : "Continuous Mode"}
+                </Button>
+                <Button 
+                  onClick={stopCamera}
+                  variant="outline"
+                  className="rounded-none border-zinc-800 py-6 text-zinc-500 hover:bg-zinc-900 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+            )}
+            
+            {selectedImage && !isAnalyzing && (
+              <Button 
+                onClick={reset}
+                variant="outline"
+                className="mt-4 w-full rounded-none border-zinc-800 py-6 font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-900 hover:text-white"
+              >
+                Clear Scene
+              </Button>
+            )}
+          </div>
+
+          {/* Detailed Results (Right) */}
+          <div className="lg:col-span-5 xl:col-span-3">
+            <div className="space-y-8 rounded-2xl border border-zinc-800 bg-black p-8">
+              <header className="flex items-center justify-between">
+                <h3 className="font-mono text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Scene_Summary</h3>
+                {result && (
+                  <Badge className="rounded-none bg-blue-600/10 text-blue-500 hover:bg-blue-600/10">
+                    {result.detections.length} objects
+                  </Badge>
+                )}
+              </header>
+
+              <div className="space-y-6">
+                {(isAnalyzing || !result) ? (
+                  <div className="space-y-4 py-12 opacity-20">
+                    <div className="h-4 w-full bg-zinc-800" />
+                    <div className="h-4 w-3/4 bg-zinc-800" />
+                    <div className="h-4 w-5/6 bg-zinc-800" />
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium leading-relaxed text-zinc-300">
+                      {result.description}
+                    </p>
+                    
+                    <div className="space-y-3">
+                      {result.detections.map((d, i) => (
+                        <div key={i} className="group flex items-center justify-between border-b border-zinc-900 pb-3 transition-colors hover:border-zinc-700">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-[10px] text-zinc-700 uppercase">Obj_{i+1}</span>
+                            <span className="font-medium uppercase tracking-tight text-white">{d.label}</span>
+                          </div>
+                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
+        </main>
+      </div>
 
-          {/* Side Panel: Results */}
-          <div className="lg:col-span-4">
-            <Card className="h-fit border-[#141414]/10 bg-white shadow-xl shadow-black/5">
-              <CardHeader className="p-6">
-                <CardTitle className="text-xl font-semibold italic text-[#141414]/90 font-serif">Results & Insights</CardTitle>
-                <CardDescription className="font-mono text-[11px] uppercase tracking-tighter">
-                  Scene Analysis Engine
-                </CardDescription>
-              </CardHeader>
-              <Separator className="bg-[#141414]/5" />
-              <CardContent className="p-0">
-                <ScrollArea className="h-[500px]">
-                  <div className="p-6">
-                    {error && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-                        {error}
-                      </div>
-                    )}
-
-                    {!result && !isAnalyzing && !error && (
-                      <div className="flex h-[300px] flex-col items-center justify-center gap-4 text-center opacity-40">
-                        <Search className="h-8 w-8" />
-                        <p className="text-sm">Analysis results will appear here after scanning.</p>
-                      </div>
-                    )}
-
-                    {isAnalyzing && (
-                      <div className="space-y-4">
-                        {[1, 2, 3, 4].map(i => (
-                          <div key={i} className="animate-pulse space-y-2">
-                            <div className="h-4 w-2/3 rounded bg-[#141414]/5" />
-                            <div className="h-8 w-full rounded bg-[#141414]/5" />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {result && (
-                      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <section>
-                          <h4 className="mb-3 font-serif text-sm font-medium italic opacity-60">Overview</h4>
-                          <p className="text-sm leading-relaxed text-[#141414]/80">
-                            {result.description}
-                          </p>
-                        </section>
-
-                        <Separator className="bg-[#141414]/5" />
-
-                        <section>
-                          <div className="mb-4 flex items-center justify-between">
-                            <h4 className="font-serif text-sm font-medium italic opacity-60">Detected Objects</h4>
-                            <Badge variant="secondary" className="bg-[#141414]/5 text-[10px] text-[#141414]/60">
-                              {result.detections.length} IDENTIFIED
-                            </Badge>
-                          </div>
-                          <div className="grid gap-2">
-                            {result.detections.map((d, index) => (
-                              <div 
-                                key={index} 
-                                className="group flex items-center justify-between rounded-lg border border-[#141414]/5 bg-white p-3 transition-all hover:border-[#141414]/20 hover:bg-[#141414]/5"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#141414] text-[#F5F5F0] text-[10px] font-bold">
-                                    {String(index + 1).padStart(2, '0')}
-                                  </div>
-                                  <span className="text-sm font-medium tracking-tight uppercase">{d.label}</span>
-                                </div>
-                                <ChevronRight className="h-4 w-4 opacity-0 transition-all group-hover:opacity-40" />
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-
-                        {result.detections.length === 0 && (
-                          <p className="py-8 text-center text-sm text-[#141414]/40 italic">
-                            No distinct objects were confidentially identified.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-              <Separator className="bg-[#141414]/5" />
-              <CardFooter className="p-4 bg-[#141414]/5">
-                <Button 
-                  disabled={!result}
-                  variant="ghost" 
-                  className="w-full justify-between text-xs font-semibold uppercase tracking-widest hover:bg-white"
-                >
-                  Export Data
-                  <Maximize2 className="h-3 w-3" />
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
-      </main>
-
-      {/* Hidden Canvas for capture */}
+      {/* Hidden Canvas */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );

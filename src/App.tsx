@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isContinuous, setIsContinuous] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,28 +41,41 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const continuousTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Stop camera on unmount
   useEffect(() => {
     return () => {
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach(track => track.stop());
-      }
+      stopCamera();
     };
   }, []);
+
+  // Continuous scanning logic
+  useEffect(() => {
+    if (isContinuous && isCapturing && !isAnalyzing) {
+      continuousTimerRef.current = setTimeout(() => {
+        autoCaptureAndAnalyze();
+      }, 3000); // Scan every 3 seconds
+    } else if (!isContinuous) {
+      if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current);
+    }
+    return () => {
+      if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current);
+    };
+  }, [isContinuous, isCapturing, isAnalyzing]);
 
   const startCamera = async () => {
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' },
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false 
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setIsCapturing(true);
         setResult(null);
+        setSelectedImage(null);
       }
     } catch (err) {
       console.error(err);
@@ -76,6 +90,28 @@ export default function App() {
       videoRef.current.srcObject = null;
     }
     setIsCapturing(false);
+    setIsContinuous(false);
+    if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current);
+  };
+
+  const autoCaptureAndAnalyze = () => {
+    if (videoRef.current && canvasRef.current && isCapturing) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Resize for faster processing while maintaining aspect ratio
+      const maxWidth = 800;
+      const scale = Math.min(1, maxWidth / video.videoWidth);
+      canvas.width = video.videoWidth * scale;
+      canvas.height = video.videoHeight * scale;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        analyzeImage(dataUrl, true);
+      }
+    }
   };
 
   const capturePhoto = () => {
@@ -110,8 +146,10 @@ export default function App() {
     }
   };
 
-  const analyzeImage = async (dataUrl: string) => {
-    setIsAnalyzing(true);
+  const analyzeImage = async (dataUrl: string, isFromContinuous = false) => {
+    if (!isFromContinuous) setIsAnalyzing(true);
+    else setIsAnalyzing(true); // Still show analysis state for UI feedback
+    
     setError(null);
     try {
       const base64 = dataUrl.split(',')[1];
@@ -120,7 +158,7 @@ export default function App() {
       setResult(detectionResult);
     } catch (err) {
       console.error(err);
-      setError("Failed to analyze image. Please try again.");
+      if (!isFromContinuous) setError("Failed to analyze image. Please try again.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -130,6 +168,7 @@ export default function App() {
     setSelectedImage(null);
     setResult(null);
     setError(null);
+    setIsContinuous(false);
     stopCamera();
   };
 
@@ -179,9 +218,9 @@ export default function App() {
                         <Camera className="relative h-12 w-12 opacity-40" />
                       </div>
                       <div className="max-w-sm space-y-2">
-                        <h3 className="text-lg font-medium">Start Detecting</h3>
+                        <h3 className="text-lg font-medium">Point & Detect</h3>
                         <p className="text-sm text-[#141414]/60">
-                          Upload an image or use your camera to identify objects in real-time.
+                          Show me some objects. I will identify them using real-time scene analysis.
                         </p>
                       </div>
                       <div className="flex flex-wrap justify-center gap-4">
@@ -191,14 +230,14 @@ export default function App() {
                           className="border-[#141414]/20 hover:bg-[#141414] hover:text-[#F5F5F0]"
                         >
                           <Upload className="mr-2 h-4 w-4" />
-                          Upload Image
+                          Upload Photo
                         </Button>
                         <Button 
                           onClick={startCamera}
                           className="bg-[#141414] text-[#F5F5F0] hover:bg-[#141414]/90"
                         >
                           <Camera className="mr-2 h-4 w-4" />
-                          Use Camera
+                          Launch Live Camera
                         </Button>
                       </div>
                       <input 
@@ -219,22 +258,73 @@ export default function App() {
                         playsInline 
                         className="h-full w-full object-cover" 
                       />
-                      <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-4">
-                        <Button 
-                          size="icon" 
-                          onClick={stopCamera}
-                          variant="outline"
-                          className="h-12 w-12 rounded-full border-white/20 bg-black/20 text-white backdrop-blur-md hover:bg-black/40"
-                        >
-                          <CameraOff className="h-5 w-5" />
-                        </Button>
-                        <Button 
-                          size="lg" 
-                          onClick={capturePhoto}
-                          className="h-12 w-12 rounded-full bg-white text-black hover:bg-white/90"
-                        >
-                          <div className="h-8 w-8 rounded-full border-2 border-black" />
-                        </Button>
+
+                      {/* Overlays on Live Video */}
+                      <AnimatePresence>
+                        {result?.detections.map((detection, idx) => (
+                          <motion.div
+                            key={`${detection.label}-${idx}`}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute border-2 border-[#141414] transition-all hover:bg-[#141414]/10"
+                            style={getBoxStyles(detection.box_2d)}
+                          >
+                            <div className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap bg-[#141414] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#F5F5F0]">
+                              {detection.label}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+
+                      {isAnalyzing && (
+                        <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full bg-[#141414] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F5F5F0]">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Scanning Scene...
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-4">
+                        <div className="flex items-center gap-4 rounded-full bg-black/20 p-2 backdrop-blur-xl">
+                          <Button 
+                            size="icon" 
+                            onClick={stopCamera}
+                            variant="ghost"
+                            className="h-12 w-12 rounded-full text-white hover:bg-white/10"
+                          >
+                            <CameraOff className="h-5 w-5" />
+                          </Button>
+                          
+                          <div className="h-12 w-px bg-white/10" />
+
+                          <Button 
+                            size="lg" 
+                            onClick={capturePhoto}
+                            className="h-14 w-14 rounded-full bg-white text-black hover:bg-white/90"
+                          >
+                            <div className="h-10 w-10 rounded-full border-2 border-black" />
+                          </Button>
+
+                          <div className="h-12 w-px bg-white/10" />
+
+                          <Button 
+                            onClick={() => setIsContinuous(!isContinuous)}
+                            variant={isContinuous ? "default" : "ghost"}
+                            className={cn(
+                              "h-12 px-6 rounded-full text-xs font-bold uppercase tracking-widest transition-all",
+                              isContinuous ? "bg-white text-black" : "text-white hover:bg-white/10"
+                            )}
+                          >
+                            {isContinuous ? (
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                                Continuous ON
+                              </div>
+                            ) : (
+                              "Auto Scan"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -276,7 +366,7 @@ export default function App() {
                       {isAnalyzing && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[2px]">
                           <Loader2 className="h-8 w-8 animate-spin text-[#141414]" />
-                          <p className="mt-4 text-sm font-medium uppercase tracking-widest text-[#141414]">Analyzing Scene...</p>
+                          <p className="mt-4 text-sm font-medium uppercase tracking-widest text-[#141414]">Analyzing Post-Capture...</p>
                         </div>
                       )}
                     </div>
@@ -288,7 +378,7 @@ export default function App() {
             <div className="mt-6 flex flex-wrap gap-3">
               <div className="flex items-center gap-2 rounded-full border border-[#141414]/10 bg-white px-4 py-2 text-xs font-medium">
                 <Info className="h-3.5 w-3.5 text-[#141414]/40" />
-                <span>Detection accuracy: {isAnalyzing ? 'Processing...' : result ? 'High (Verified)' : 'Ready'}</span>
+                <span>Status: {isContinuous ? 'Auto-Scanning' : isCapturing ? 'Live Feed' : 'Idle'}</span>
               </div>
               {selectedImage && !isAnalyzing && (
                 <Button 
@@ -298,7 +388,7 @@ export default function App() {
                   className="gap-2 text-xs font-medium hover:bg-[#141414]/5"
                 >
                   <RefreshCw className="h-3 w-3" />
-                  Rerun Detection
+                  Request Deep Scan
                 </Button>
               )}
             </div>

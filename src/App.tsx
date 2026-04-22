@@ -27,12 +27,30 @@ import { Badge } from '@/components/ui/badge';
 import { detectObjects, Detection, DetectionResult } from './services/geminiService';
 import { cn } from '@/lib/utils';
 
+interface TrackedObject extends Detection {
+  id: string;
+  color: string;
+  firstSeen: number;
+  lastSeen: number;
+}
+
+const COLORS = [
+  '#3b82f6', // blue
+  '#ef4444', // red
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+];
+
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isContinuous, setIsContinuous] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DetectionResult | null>(null);
+  const [trackedObjects, setTrackedObjects] = useState<TrackedObject[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -184,7 +202,62 @@ export default function App() {
       const base64 = dataUrl.split(',')[1];
       const mimeType = dataUrl.split(';')[0].split(':')[1];
       const detectionResult = await detectObjects(base64, mimeType);
+      
       setResult(detectionResult);
+      
+      // TRACKING LOGIC: Match new detections with existing tracked objects
+      setTrackedObjects(prev => {
+        const now = Date.now();
+        const updatedTracked: TrackedObject[] = [];
+        const usedDetectionIndices = new Set<number>();
+
+        // 1. Try to match existing trackers to new detections
+        prev.forEach(tracked => {
+          let bestMatchIdx = -1;
+          let minDistance = 250; // Threshold for matching (normalized coordinates 0-1000)
+
+          detectionResult.detections.forEach((det, idx) => {
+            if (usedDetectionIndices.has(idx)) return;
+            if (det.label.toLowerCase() !== tracked.label.toLowerCase()) return;
+
+            // Calculate centroid distance
+            const detCenter = [(det.box_2d[0] + det.box_2d[2]) / 2, (det.box_2d[1] + det.box_2d[3]) / 2];
+            const trackCenter = [(tracked.box_2d[0] + tracked.box_2d[2]) / 2, (tracked.box_2d[1] + tracked.box_2d[3]) / 2];
+            const dist = Math.sqrt(Math.pow(detCenter[0] - trackCenter[0], 2) + Math.pow(detCenter[1] - trackCenter[1], 2));
+
+            if (dist < minDistance) {
+              minDistance = dist;
+              bestMatchIdx = idx;
+            }
+          });
+
+          if (bestMatchIdx !== -1) {
+            usedDetectionIndices.add(bestMatchIdx);
+            updatedTracked.push({
+              ...tracked,
+              box_2d: detectionResult.detections[bestMatchIdx].box_2d,
+              lastSeen: now
+            });
+          }
+        });
+
+        // 2. Add remaining detections as new trackers
+        detectionResult.detections.forEach((det, idx) => {
+          if (usedDetectionIndices.has(idx)) return;
+          
+          updatedTracked.push({
+            ...det,
+            id: `obj-${Math.random().toString(36).substr(2, 9)}`,
+            color: COLORS[updatedTracked.length % COLORS.length],
+            firstSeen: now,
+            lastSeen: now
+          });
+        });
+
+        // 3. Keep only recently seen objects (ttl: 5 seconds)
+        return updatedTracked.filter(obj => now - obj.lastSeen < 5000);
+      });
+
     } catch (err) {
       console.error(err);
       if (!isFromContinuous) setError("Failed to analyze image. Please try again.");
@@ -322,20 +395,37 @@ export default function App() {
                     className="h-full w-full object-cover" 
                   />
                   
-                  {/* Bounding Boxes Over Video */}
-                  <AnimatePresence>
-                    {result?.detections.map((detection, idx) => (
+                  {/* Bounding Boxes Over Video - Using Tracked Objects */}
+                  <AnimatePresence mode="popLayout">
+                    {trackedObjects.map((obj) => (
                       <motion.div
-                        key={`${detection.label}-${idx}`}
+                        key={obj.id}
+                        layoutId={isContinuous ? obj.id : undefined}
                         initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute border-2 border-blue-500"
-                        style={getBoxStyles(detection.box_2d)}
+                        animate={{ 
+                          opacity: 1, 
+                          scale: 1,
+                          ...getBoxStyles(obj.box_2d)
+                        }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className="absolute border-2"
+                        style={{ borderColor: obj.color }}
                       >
-                        <div className="absolute -top-6 left-0 bg-blue-500 px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase">
-                          {detection.label}
+                        <div 
+                          className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase shadow-lg transition-colors"
+                          style={{ backgroundColor: obj.color }}
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                          {obj.label}
+                          <span className="opacity-60">#{obj.id.slice(-4)}</span>
                         </div>
+                        
+                        {/* Target Corner Decorators */}
+                        <div className="absolute top-0 left-0 h-2 w-2 border-t-2 border-l-2" style={{ borderColor: 'white' }} />
+                        <div className="absolute top-0 right-0 h-2 w-2 border-t-2 border-r-2" style={{ borderColor: 'white' }} />
+                        <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2" style={{ borderColor: 'white' }} />
+                        <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2" style={{ borderColor: 'white' }} />
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -351,16 +441,23 @@ export default function App() {
                 <div className="relative h-full w-full">
                   <img src={selectedImage} alt="Analysis Target" className="h-full w-full object-contain" />
                   
-                  {!isAnalyzing && result?.detections.map((detection, idx) => (
+                  {!isAnalyzing && trackedObjects.map((obj) => (
                     <motion.div
-                      key={`${detection.label}-${idx}`}
+                      key={obj.id}
                       initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="absolute border-2 border-blue-500"
-                      style={getBoxStyles(detection.box_2d)}
+                      animate={{ 
+                        opacity: 1, 
+                        scale: 1,
+                        ...getBoxStyles(obj.box_2d)
+                      }}
+                      className="absolute border-2"
+                      style={{ borderColor: obj.color }}
                     >
-                      <div className="absolute -top-6 left-0 bg-blue-500 px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase">
-                        {detection.label}
+                      <div 
+                        className="absolute -top-6 left-0 px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase shadow-lg"
+                        style={{ backgroundColor: obj.color }}
+                      >
+                        {obj.label}
                       </div>
                     </motion.div>
                   ))}
@@ -468,13 +565,17 @@ export default function App() {
                     </p>
                     
                     <div className="space-y-3">
-                      {result.detections.map((d, i) => (
-                        <div key={i} className="group flex items-center justify-between border-b border-zinc-900 pb-3 transition-colors hover:border-zinc-700">
+                      {trackedObjects.map((obj, i) => (
+                        <div key={obj.id} className="group flex items-center justify-between border-b border-zinc-900 pb-3 transition-colors hover:border-zinc-700">
                           <div className="flex items-center gap-3">
                             <span className="font-mono text-[10px] text-zinc-700 uppercase">Obj_{i+1}</span>
-                            <span className="font-medium uppercase tracking-tight text-white">{d.label}</span>
+                            <span className="font-medium uppercase tracking-tight text-white">{obj.label}</span>
+                            <span className="font-mono text-[9px] text-zinc-500">#{obj.id.slice(-4)}</span>
                           </div>
-                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                          <div 
+                            className="h-2 w-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]" 
+                            style={{ backgroundColor: obj.color }} 
+                          />
                         </div>
                       ))}
                     </div>

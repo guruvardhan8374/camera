@@ -378,11 +378,11 @@ export default function App() {
               className="mb-8 text-[60px] font-black leading-[0.85] tracking-tighter uppercase sm:text-[90px] xl:text-[110px]"
             >
               Identify <br />
-              <span className="text-blue-500">Fast.</span> <br />
+              <span className="text-blue-500 underline decoration-blue-500/30 decoration-8 underline-offset-8">Fast.</span> <br />
               Analyze.
             </motion.h1>
             <p className="max-w-md font-medium leading-snug text-zinc-400 sm:text-lg">
-              Low-latency AI scene analysis powered by Gemini 1.5 Flash. Real-time identification of complex environments.
+              Low-latency AI scene analysis powered by Gemini 3 Flash. Real-time identification of complex environments with persistent tracking memory.
             </p>
             
             <div className="mt-8 flex flex-wrap gap-4">
@@ -417,7 +417,7 @@ export default function App() {
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col">
                   <span className="mb-2 text-[10px] font-bold text-zinc-600 uppercase">Engine Architecture</span>
-                  <div className="text-sm font-bold tracking-tight uppercase">YOLO-GEMINI-FLASH v1.5</div>
+                  <div className="text-sm font-bold tracking-tight uppercase">YOLO-GEMINI-FLASH v3.0</div>
                 </div>
                 <div className="flex flex-col">
                   <span className="mb-2 text-[10px] font-bold text-zinc-600 uppercase">Detection Status</span>
@@ -545,16 +545,19 @@ export default function App() {
               <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
                 <div className="mb-2 flex justify-between">
                   <span className="font-mono text-[10px] text-zinc-500 uppercase">Detection_Status</span>
-                  <span className="font-mono text-[10px] text-blue-400">
-                    {isAnalyzing ? "Processing..." : result ? "Analysis Complete" : "Standby"}
+                  <span className={cn(
+                    "font-mono text-[10px] font-bold tracking-tight",
+                    isApiOperational === false ? "text-amber-500" : (isAnalyzing || isContinuous) ? "text-blue-400" : "text-zinc-500"
+                  )}>
+                    {isApiOperational === false ? "CONNECTION ERROR" : isAnalyzing ? "Processing..." : isContinuous ? "Streaming Active" : "Standby"}
                   </span>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: isAnalyzing ? "100%" : result ? "94%" : "0%" }}
+                    animate={{ width: isApiOperational === false ? "0%" : isAnalyzing ? "100%" : (result || isContinuous) ? "94%" : "0%" }}
                     transition={{ duration: isAnalyzing ? 1.5 : 0.5 }}
-                    className={cn("h-full", isAnalyzing ? "bg-blue-600" : "bg-blue-500")}
+                    className={cn("h-full", isApiOperational === false ? "bg-amber-500" : isAnalyzing ? "bg-blue-600" : "bg-blue-500")}
                   />
                 </div>
               </div>

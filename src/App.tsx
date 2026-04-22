@@ -205,22 +205,24 @@ export default function App() {
       
       setResult(detectionResult);
       
-      // TRACKING LOGIC: Match new detections with existing tracked objects
+// TRACKING LOGIC: Match new detections with existing tracked objects
       setTrackedObjects(prev => {
         const now = Date.now();
         const updatedTracked: TrackedObject[] = [];
-        const usedDetectionIndices = new Set<number>();
+        const currentDetectionIndices = new Set<number>();
 
-        // 1. Try to match existing trackers to new detections
-        prev.forEach(tracked => {
+        // 1. Proximity Match (High Confidence)
+        const trackers = [...prev];
+        
+        // Find best proximity matches first
+        trackers.forEach(tracked => {
           let bestMatchIdx = -1;
-          let minDistance = 250; // Threshold for matching (normalized coordinates 0-1000)
+          let minDistance = 150; // Tighter threshold for proximity
 
           detectionResult.detections.forEach((det, idx) => {
-            if (usedDetectionIndices.has(idx)) return;
+            if (currentDetectionIndices.has(idx)) return;
             if (det.label.toLowerCase() !== tracked.label.toLowerCase()) return;
 
-            // Calculate centroid distance
             const detCenter = [(det.box_2d[0] + det.box_2d[2]) / 2, (det.box_2d[1] + det.box_2d[3]) / 2];
             const trackCenter = [(tracked.box_2d[0] + tracked.box_2d[2]) / 2, (tracked.box_2d[1] + tracked.box_2d[3]) / 2];
             const dist = Math.sqrt(Math.pow(detCenter[0] - trackCenter[0], 2) + Math.pow(detCenter[1] - trackCenter[1], 2));
@@ -232,7 +234,7 @@ export default function App() {
           });
 
           if (bestMatchIdx !== -1) {
-            usedDetectionIndices.add(bestMatchIdx);
+            currentDetectionIndices.add(bestMatchIdx);
             updatedTracked.push({
               ...tracked,
               box_2d: detectionResult.detections[bestMatchIdx].box_2d,
@@ -241,21 +243,70 @@ export default function App() {
           }
         });
 
-        // 2. Add remaining detections as new trackers
+        // 2. Re-Identification Match (Visual Similarity Heuristics: Size & Ratio)
+        // Check unmatched detections against "lost" objects
+        detectionResult.detections.forEach((det, detIdx) => {
+          if (currentDetectionIndices.has(detIdx)) return;
+
+          let bestReidIdx = -1;
+          let minScore = 0.4; // Similarity Threshold
+
+          trackers.forEach((tracked, trackIdx) => {
+            // Skip if already updated this turn or if it was just seen (proximity should have caught it)
+            if (updatedTracked.some(ut => ut.id === tracked.id)) return;
+            if (det.label.toLowerCase() !== tracked.label.toLowerCase()) return;
+
+            // Attribute comparison
+            const detW = det.box_2d[3] - det.box_2d[1];
+            const detH = det.box_2d[2] - det.box_2d[0];
+            const trackW = tracked.box_2d[3] - tracked.box_2d[1];
+            const trackH = tracked.box_2d[2] - tracked.box_2d[0];
+
+            const detArea = detW * detH;
+            const trackArea = trackW * trackH;
+            const detRatio = detW / (detH || 1);
+            const trackRatio = trackW / (trackH || 1);
+
+            const areaDiff = Math.abs(detArea - trackArea) / Math.max(detArea, trackArea);
+            const ratioDiff = Math.abs(detRatio - trackRatio) / Math.max(detRatio, trackRatio);
+
+            const similarityScore = areaDiff + ratioDiff;
+
+            if (similarityScore < minScore) {
+              minScore = similarityScore;
+              bestReidIdx = trackIdx;
+            }
+          });
+
+          if (bestReidIdx !== -1) {
+            currentDetectionIndices.add(detIdx);
+            const reconciled = trackers[bestReidIdx];
+            updatedTracked.push({
+              ...reconciled,
+              box_2d: det.box_2d,
+              lastSeen: now
+            });
+          }
+        });
+
+        // 3. New Objects
         detectionResult.detections.forEach((det, idx) => {
-          if (usedDetectionIndices.has(idx)) return;
+          if (currentDetectionIndices.has(idx)) return;
           
           updatedTracked.push({
             ...det,
             id: `obj-${Math.random().toString(36).substr(2, 9)}`,
-            color: COLORS[updatedTracked.length % COLORS.length],
+            color: COLORS[Math.floor(Math.random() * COLORS.length)],
             firstSeen: now,
             lastSeen: now
           });
         });
 
-        // 3. Keep only recently seen objects (ttl: 5 seconds)
-        return updatedTracked.filter(obj => now - obj.lastSeen < 5000);
+        // Final cleanup: Keep seen or recently lost trackers (TTL: 15 seconds for Re-ID bank)
+        // Objects not in current frame are preserved in state but not rendered if they are "old"
+        return updatedTracked.concat(
+          trackers.filter(t => !updatedTracked.find(ut => ut.id === t.id) && (now - t.lastSeen < 15000))
+        );
       });
 
     } catch (err) {
@@ -395,39 +446,47 @@ export default function App() {
                     className="h-full w-full object-cover" 
                   />
                   
-                  {/* Bounding Boxes Over Video - Using Tracked Objects */}
+                  {/* Bounding Boxes Over Video - Using Tracked Objects (only those recently seen) */}
                   <AnimatePresence mode="popLayout">
-                    {trackedObjects.map((obj) => (
-                      <motion.div
-                        key={obj.id}
-                        layoutId={isContinuous ? obj.id : undefined}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ 
-                          opacity: 1, 
-                          scale: 1,
-                          ...getBoxStyles(obj.box_2d)
-                        }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
-                        className="absolute border-2"
-                        style={{ borderColor: obj.color }}
-                      >
-                        <div 
-                          className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase shadow-lg transition-colors"
-                          style={{ backgroundColor: obj.color }}
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-                          {obj.label}
-                          <span className="opacity-60">#{obj.id.slice(-4)}</span>
-                        </div>
-                        
-                        {/* Target Corner Decorators */}
-                        <div className="absolute top-0 left-0 h-2 w-2 border-t-2 border-l-2" style={{ borderColor: 'white' }} />
-                        <div className="absolute top-0 right-0 h-2 w-2 border-t-2 border-r-2" style={{ borderColor: 'white' }} />
-                        <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2" style={{ borderColor: 'white' }} />
-                        <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2" style={{ borderColor: 'white' }} />
-                      </motion.div>
-                    ))}
+                    {trackedObjects
+                      .filter(obj => Date.now() - obj.lastSeen < 2500) // Only show if recently detected
+                      .map((obj) => {
+                        const isReidentified = Date.now() - obj.firstSeen > 10000;
+                        return (
+                          <motion.div
+                            key={obj.id}
+                            layoutId={isContinuous ? obj.id : undefined}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ 
+                              opacity: 1, 
+                              scale: 1,
+                              ...getBoxStyles(obj.box_2d)
+                            }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
+                            className="absolute border-2"
+                            style={{ borderColor: obj.color }}
+                          >
+                            <div 
+                              className="absolute -top-6 left-0 flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 font-mono text-[10px] font-black text-white uppercase shadow-lg transition-colors"
+                              style={{ backgroundColor: obj.color }}
+                            >
+                              <div className={cn("h-1.5 w-1.5 rounded-full bg-white", isReidentified ? "animate-ping" : "animate-pulse")} />
+                              {obj.label}
+                              <span className="opacity-60">#{obj.id.slice(-4)}</span>
+                              {isReidentified && (
+                                <span className="ml-1 rounded-sm bg-white/20 px-1 text-[8px] font-bold">RE-ID</span>
+                              )}
+                            </div>
+                            
+                            {/* Target Corner Decorators */}
+                            <div className="absolute top-0 left-0 h-2 w-2 border-t-2 border-l-2" style={{ borderColor: 'white' }} />
+                            <div className="absolute top-0 right-0 h-2 w-2 border-t-2 border-r-2" style={{ borderColor: 'white' }} />
+                            <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2" style={{ borderColor: 'white' }} />
+                            <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2" style={{ borderColor: 'white' }} />
+                          </motion.div>
+                        );
+                      })}
                   </AnimatePresence>
 
                   <div className="absolute top-4 left-4 flex items-center gap-2 border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-md">
@@ -565,19 +624,31 @@ export default function App() {
                     </p>
                     
                     <div className="space-y-3">
-                      {trackedObjects.map((obj, i) => (
-                        <div key={obj.id} className="group flex items-center justify-between border-b border-zinc-900 pb-3 transition-colors hover:border-zinc-700">
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-[10px] text-zinc-700 uppercase">Obj_{i+1}</span>
-                            <span className="font-medium uppercase tracking-tight text-white">{obj.label}</span>
-                            <span className="font-mono text-[9px] text-zinc-500">#{obj.id.slice(-4)}</span>
-                          </div>
-                          <div 
-                            className="h-2 w-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]" 
-                            style={{ backgroundColor: obj.color }} 
-                          />
-                        </div>
-                      ))}
+                      {trackedObjects
+                        .filter(obj => Date.now() - obj.lastSeen < 3000) // Only show active objects in list
+                        .map((obj, i) => {
+                          const isReidentified = Date.now() - obj.firstSeen > 10000;
+                          return (
+                            <div key={obj.id} className="group flex items-center justify-between border-b border-zinc-900 pb-3 transition-colors hover:border-zinc-700">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-[10px] text-zinc-700 uppercase">Obj_{i+1}</span>
+                                <div className="flex flex-col">
+                                  <span className="font-medium uppercase tracking-tight text-white">{obj.label}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[9px] text-zinc-500">#{obj.id.slice(-4)}</span>
+                                    {isReidentified && (
+                                      <span className="rounded-[2px] bg-blue-500/10 px-1 font-mono text-[8px] text-blue-400">MEMORY_RESTORED</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div 
+                                className="h-2 w-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]" 
+                                style={{ backgroundColor: obj.color }} 
+                              />
+                            </div>
+                          );
+                        })}
                     </div>
                   </>
                 )}

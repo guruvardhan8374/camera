@@ -34,7 +34,7 @@ export async function detectObjects(base64Image: string, mimeType: string): Prom
   // Use gemini-3-flash-preview as recommended in skill
   const modelToUse = "gemini-3-flash-preview";
 
-  const prompt = "Act as an expert computer vision system. Detect all objects in the image. For each object, return its label and bounding box coordinates in [ymin, xmin, ymax, xmax] format. Coordinates must be normalized (0-1000). Provide a clear scene description.";
+  const prompt = "Act as an expert computer vision system with object re-identification memory. Detect all objects in the image. For each object, return its label and bounding box coordinates in [ymin, xmin, ymax, xmax] format. Coordinates must be normalized (0-1000). Provide a clear, concise scene description that mentions the most prominent objects and their spatial relationships to help the user identify them uniquely.";
 
   try {
     const response = await ai.models.generateContent({

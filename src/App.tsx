@@ -349,7 +349,7 @@ export default function App() {
                 </div>
               )}
 
-              {isAnalyzing && (
+              {isAnalyzing && !isContinuous && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
                   <div className="h-12 w-12 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
                   <span className="mt-4 font-mono text-[10px] font-bold tracking-[0.3em] text-white uppercase">Analyzing Frame</span>
@@ -359,14 +359,17 @@ export default function App() {
               {/* Bottom Analysis Stats Card */}
               <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
                 <div className="mb-2 flex justify-between">
-                  <span className="font-mono text-[10px] text-zinc-500 uppercase">Detection_Confidence</span>
-                  <span className="font-mono text-[10px] text-blue-400">94.2%</span>
+                  <span className="font-mono text-[10px] text-zinc-500 uppercase">Detection_Status</span>
+                  <span className="font-mono text-[10px] text-blue-400">
+                    {isAnalyzing ? "Processing..." : result ? "Analysis Complete" : "Standby"}
+                  </span>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: isAnalyzing ? "40%" : result ? "94%" : "0%" }}
-                    className="h-full bg-blue-500"
+                    animate={{ width: isAnalyzing ? "100%" : result ? "94%" : "0%" }}
+                    transition={{ duration: isAnalyzing ? 1.5 : 0.5 }}
+                    className={cn("h-full", isAnalyzing ? "bg-blue-600" : "bg-blue-500")}
                   />
                 </div>
               </div>

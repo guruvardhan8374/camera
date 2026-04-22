@@ -36,6 +36,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +50,16 @@ export default function App() {
       stopCamera();
     };
   }, []);
+
+  // Sync stream to video element whenever it changes or capture starts
+  useEffect(() => {
+    if (isCapturing && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current?.play().catch(e => console.error("Video play failed", e));
+      };
+    }
+  }, [isCapturing, cameraStream]);
 
   // Continuous scanning logic
   useEffect(() => {
@@ -71,22 +82,27 @@ export default function App() {
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false 
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setIsCapturing(true);
-        setResult(null);
-        setSelectedImage(null);
-      }
+      
+      setCameraStream(stream);
+      setIsCapturing(true);
+      setResult(null);
+      setSelectedImage(null);
     } catch (err) {
       console.error(err);
-      setError("Could not access camera. Please check permissions.");
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setError("Camera permission denied. Please allow camera access in your browser settings.");
+      } else {
+        setError("Could not access camera. Ensure you are on a secure connection and have a camera connected.");
+      }
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach(track => track.stop());
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
     setIsCapturing(false);

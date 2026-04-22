@@ -1,0 +1,6 @@
+{
+  "name": "Vision AI: Object Detector",
+  "description": "Powerful real-time object detection and scene analysis powered by Gemini 1.5 Flash.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["vision"]
+}

@@ -1,6 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is missing! Detection will not work. Set it in your environment variables.");
+      // We don't throw here to prevent the whole app from crashing on load
+      return null;
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 export interface Detection {
   label: string;
@@ -13,6 +26,11 @@ export interface DetectionResult {
 }
 
 export async function detectObjects(base64Image: string, mimeType: string): Promise<DetectionResult> {
+  const ai = getAI();
+  if (!ai) {
+    throw new Error("AI Engine not initialized. Missing API Key.");
+  }
+
   // Use gemini-3-flash-preview as recommended in skill
   const modelToUse = "gemini-3-flash-preview";
 

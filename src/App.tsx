@@ -66,7 +66,7 @@ export default function App() {
     if (isContinuous && isCapturing && !isAnalyzing) {
       continuousTimerRef.current = setTimeout(() => {
         autoCaptureAndAnalyze();
-      }, 3000); // Scan every 3 seconds
+      }, 2000); // Scan more frequently (every 2 seconds)
     } else if (!isContinuous) {
       if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current);
     }
@@ -85,6 +85,7 @@ export default function App() {
       
       setCameraStream(stream);
       setIsCapturing(true);
+      setIsContinuous(true); // START SCANNING IMMEDIATELY
       setResult(null);
       setSelectedImage(null);
     } catch (err) {

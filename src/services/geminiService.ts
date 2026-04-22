@@ -15,11 +15,13 @@ export interface DetectionResult {
 export async function detectObjects(base64Image: string, mimeType: string): Promise<DetectionResult> {
   const model = "gemini-3-flash-preview";
 
-  const prompt = `Detect all objects in this image. 
-    Return the coordinates of each object as bounding boxes in [ymin, xmin, ymax, xmax] format (normalized 0-1000).
-    Provide a label for each object.
-    Also provide a brief overall description of the scene.
-    Return the result in JSON format.`;
+  const prompt = `Perform object detection on this image. 
+    1. Identify all distinct objects.
+    2. For each object, provide a label and a bounding box in the format [ymin, xmin, ymax, xmax].
+    3. Use normalized coordinates (0 to 1000).
+    4. Provide a 1-sentence summary of the scene.
+    Return ONLY valid JSON. 
+    Example format: {"detections": [{"box_2d": [100, 200, 300, 400], "label": "camera"}], "description": "A person holding a camera."}`;
 
   try {
     const response = await ai.models.generateContent({

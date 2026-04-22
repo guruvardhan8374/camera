@@ -54,6 +54,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isApiOperational, setIsApiOperational] = useState<boolean | null>(null);
+  const [lastUpdateAttempt, setLastUpdateAttempt] = useState<number>(0);
   const lastSpokenRef = useRef<string>("");
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -194,6 +196,7 @@ export default function App() {
   };
 
   const analyzeImage = async (dataUrl: string, isFromContinuous = false) => {
+    setLastUpdateAttempt(Date.now());
     if (!isFromContinuous) setIsAnalyzing(true);
     else setIsAnalyzing(true); // Still show analysis state for UI feedback
     
@@ -204,6 +207,7 @@ export default function App() {
       const detectionResult = await detectObjects(base64, mimeType);
       
       setResult(detectionResult);
+      setIsApiOperational(true);
       
 // TRACKING LOGIC: Match new detections with existing tracked objects
       setTrackedObjects(prev => {
@@ -311,7 +315,8 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      if (!isFromContinuous) setError("Failed to analyze image. Please try again.");
+      setIsApiOperational(false);
+      if (!isFromContinuous) setError("Analysis service unavailable. Check API Key configuration.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -417,8 +422,14 @@ export default function App() {
                 <div className="flex flex-col">
                   <span className="mb-2 text-[10px] font-bold text-zinc-600 uppercase">Detection Status</span>
                   <div className="flex items-center gap-2">
-                    <div className={cn("h-2 w-2 rounded-full", isContinuous ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
-                    <span className="text-sm font-bold tracking-tight">{isContinuous ? "STREAMING_MODE" : "STANDBY"}</span>
+                    <div className={cn(
+                      "h-2 w-2 rounded-full", 
+                      isContinuous ? "bg-red-500 animate-pulse" : "bg-emerald-500",
+                      isApiOperational === false && "bg-amber-500"
+                    )} />
+                    <span className="text-sm font-bold tracking-tight">
+                      {isApiOperational === false ? "CONNECTION_ERROR" : isContinuous ? "STREAMING_MODE" : "STANDBY"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -611,7 +622,7 @@ export default function App() {
               </header>
 
               <div className="space-y-6">
-                {(isAnalyzing || !result) ? (
+                {(isAnalyzing && !result) ? (
                   <div className="space-y-4 py-12 opacity-20">
                     <div className="h-4 w-full bg-zinc-800" />
                     <div className="h-4 w-3/4 bg-zinc-800" />
@@ -619,13 +630,27 @@ export default function App() {
                   </div>
                 ) : (
                   <>
+                    <div className="mb-4 flex items-center justify-between border-b border-zinc-900 pb-2">
+                      <span className="font-mono text-[9px] text-zinc-600 uppercase">Latency Verification</span>
+                      <span className="font-mono text-[9px] text-zinc-500">
+                        {lastUpdateAttempt > 0 ? `Synced ${Math.floor((Date.now() - lastUpdateAttempt) / 1000)}s ago` : "Waiting for stream..."}
+                      </span>
+                    </div>
+
+                    {isApiOperational === false && (
+                      <div className="mb-6 border-l-2 border-amber-500 bg-amber-500/5 p-4 text-xs font-bold text-amber-500">
+                        API CONNECTION FAILED. <br/>
+                        <span className="text-[10px] font-normal opacity-80 uppercase tracking-tighter">Please ensure GEMINI_API_KEY is configured in the environment settings.</span>
+                      </div>
+                    )}
+
                     <p className="text-sm font-medium leading-relaxed text-zinc-300">
-                      {result.description}
+                      {result?.description || "Awaiting first analysis frame to describe the scene..."}
                     </p>
                     
                     <div className="space-y-3">
                       {trackedObjects
-                        .filter(obj => Date.now() - obj.lastSeen < 3000) // Only show active objects in list
+                        .filter(obj => Date.now() - obj.lastSeen < 4000) // Relaxed filter for smoother list presentation
                         .map((obj, i) => {
                           const isReidentified = Date.now() - obj.firstSeen > 10000;
                           return (

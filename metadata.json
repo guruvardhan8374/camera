@@ -1,6 +1,6 @@
 {
-  "name": "Vision AI: Object Detector",
-  "description": "Powerful real-time object detection and scene analysis powered by Gemini 1.5 Flash.",
+  "name": "Vision AI: Advanced Tracker",
+  "description": "Real-time object detection with spatial awareness, persistent tracking, and multi-frame re-identification powered by Gemini 3 Flash.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["vision"]
 }

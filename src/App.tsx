@@ -17,6 +17,8 @@ import {
   Maximize2,
   Trash2,
   RefreshCw,
+  Volume2,
+  VolumeX,
   CameraOff
 } from 'lucide-react';
 
@@ -33,6 +35,8 @@ export default function App() {
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const lastSpokenRef = useRef<string>("");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +74,18 @@ export default function App() {
       if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current);
     };
   }, [isContinuous, isCapturing, isAnalyzing]);
+
+  // Voice Feedback logic
+  useEffect(() => {
+    if (isVoiceEnabled && result?.description && result.description !== lastSpokenRef.current) {
+      const utterance = new SpeechSynthesisUtterance(result.description);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.cancel(); // Stop current speech
+      window.speechSynthesis.speak(utterance);
+      lastSpokenRef.current = result.description;
+    }
+  }, [result, isVoiceEnabled]);
 
   const startCamera = async () => {
     try {
@@ -212,7 +228,13 @@ export default function App() {
             </div>
           </div>
           <nav className="flex gap-6 pt-2 font-mono text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase sm:gap-8">
-            <span className="cursor-pointer transition-colors hover:text-white">Active</span>
+            <div 
+              className={cn("flex items-center gap-2 cursor-pointer transition-colors hover:text-white", isVoiceEnabled ? "text-blue-500" : "text-zinc-500")}
+              onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+            >
+              {isVoiceEnabled ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
+              <span>Voice {isVoiceEnabled ? "On" : "Off"}</span>
+            </div>
             <span className="cursor-pointer transition-colors hover:text-white">Metrics</span>
             <span className="text-white">Live-Feed</span>
           </nav>
@@ -388,6 +410,16 @@ export default function App() {
                   )}
                 >
                   {isContinuous ? "Stop Stream" : "Continuous Mode"}
+                </Button>
+                <Button 
+                  onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+                  variant="outline"
+                  className={cn(
+                    "rounded-none border-zinc-800 py-6 px-4 transition-all",
+                    isVoiceEnabled ? "bg-blue-600/10 text-blue-500" : "text-zinc-500"
+                  )}
+                >
+                  {isVoiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
                 </Button>
                 <Button 
                   onClick={stopCamera}
